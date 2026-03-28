@@ -50,6 +50,12 @@ class TestAllowlistedPath:
     def test_node_modules(self):
         assert is_allowlisted_path("foo/node_modules/pkg/index.js", CONFIG["allowlist_paths"]) is True
 
+    def test_node_modules_windows_path(self):
+        assert is_allowlisted_path(r"foo\\node_modules\\pkg\\index.js", CONFIG["allowlist_paths"]) is True
+
+    def test_tests_directory(self):
+        assert is_allowlisted_path("tests/test_unit.py", CONFIG["allowlist_paths"]) is True
+
     def test_minified_js(self):
         assert is_allowlisted_path("dist/bundle.min.js", CONFIG["allowlist_paths"]) is True
 
@@ -78,6 +84,9 @@ class TestFalsePositive:
 
     def test_real_looking_secret(self):
         assert is_false_positive("Abc123Def456Ghi789", CONFIG["allowlist_stopwords"]) is False
+
+    def test_test_substring_not_auto_filtered(self):
+        assert is_false_positive("AbcTestDef456Ghi789", CONFIG["allowlist_stopwords"]) is False
 
 
 # --- scan_line ---

@@ -1,6 +1,7 @@
 {
   "allowlist_paths": [
     "\\.git/",
+    "(?:^|/)tests?/",
     "node_modules/",
     "vendor/",
     "\\.min\\.js$",

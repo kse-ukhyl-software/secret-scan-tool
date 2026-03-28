@@ -42,3 +42,9 @@ https://github.com/kse-ukhyl-software/simple-go-service-a/blob/main/.github/work
 
 https://github.com/kse-ukhyl-software/my-app/actions/runs/23685976597
 https://github.com/kse-ukhyl-software/my-app/blob/main/.github/workflows/ci-main.yaml
+
+# Remote Cleanup
+![alt text](secret-push-1.png)
+![alt text](secret-push-2.png)
+
+# Additional Task + Test Folder fix
