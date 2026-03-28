@@ -6,8 +6,10 @@ import json
 import math
 import os
 from pathlib import Path
+import queue
 import re
 import sys
+import threading
 from dataclasses import dataclass, asdict
 
 # --- Rules ---
@@ -137,12 +139,66 @@ def scan_file(filepath: str, rules: list[dict], config: dict) -> list[Finding]:
 SKIP_DIRS = {".git", "node_modules", "vendor", "__pycache__"}
 
 
+def iter_scannable_files(path: str):
+    """Yield files that should be scanned, matching directory skip rules."""
+    for filepath in Path(path).rglob("*"):
+        if filepath.is_file() and not any(part.startswith(".") or part in SKIP_DIRS for part in filepath.parts):
+            yield str(filepath)
+
+
 def scan_directory(path: str, rules: list[dict], config: dict) -> list[Finding]:
     """Recursively scan a directory for secrets."""
     findings = []
-    for filepath in Path(path).rglob("*"):
-        if filepath.is_file() and not any(part.startswith(".") or part in SKIP_DIRS for part in filepath.parts):
-            findings.extend(scan_file(str(filepath), rules, config))
+    for filepath in iter_scannable_files(path):
+        findings.extend(scan_file(filepath, rules, config))
+    return findings
+
+
+def scan_directory_threaded(path: str, rules: list[dict], config: dict, threads: int = 4) -> list[Finding]:
+    """Scan a directory with producer/consumer threading and deterministic output order."""
+    if threads <= 1:
+        return scan_directory(path, rules, config)
+
+    file_queue: queue.Queue[tuple[int, str] | None] = queue.Queue(maxsize=max(threads * 8, 1))
+    indexed_findings: list[tuple[int, list[Finding]]] = []
+    findings_lock = threading.Lock()
+
+    def producer() -> None:
+        for index, filepath in enumerate(iter_scannable_files(path)):
+            file_queue.put((index, filepath))
+        for _ in range(threads):
+            file_queue.put(None)
+
+    def consumer() -> None:
+        while True:
+            item = file_queue.get()
+            if item is None:
+                file_queue.task_done()
+                break
+
+            index, filepath = item
+            file_findings = scan_file(filepath, rules, config)
+            with findings_lock:
+                indexed_findings.append((index, file_findings))
+            file_queue.task_done()
+
+    producer_thread = threading.Thread(target=producer)
+    consumer_threads = [threading.Thread(target=consumer) for _ in range(threads)]
+
+    for thread in consumer_threads:
+        thread.start()
+    producer_thread.start()
+
+    producer_thread.join()
+    file_queue.join()
+
+    for thread in consumer_threads:
+        thread.join()
+
+    indexed_findings.sort(key=lambda item: item[0])
+    findings = []
+    for _, file_findings in indexed_findings:
+        findings.extend(file_findings)
     return findings
 
 
@@ -178,6 +234,12 @@ def print_json(findings: list[Finding]) -> None:
 # --- CLI ---
 
 def main():
+    def positive_int(value: str) -> int:
+        int_value = int(value)
+        if int_value < 1:
+            raise argparse.ArgumentTypeError("--threads must be >= 1")
+        return int_value
+
     parser = argparse.ArgumentParser(
         description="Simple secret detection tool (inspired by gitleaks)"
     )
@@ -193,6 +255,8 @@ def main():
                         help="Path to baseline JSON file of known findings to ignore")
     parser.add_argument("--create-baseline", default=None,
                         help="Write current findings to a baseline JSON file and exit")
+    parser.add_argument("--threads", type=positive_int, default=4,
+                        help="Number of worker threads for directory scanning (default: 4)")
     args = parser.parse_args()
 
     rules = load_rules(args.rules)
@@ -202,7 +266,7 @@ def main():
     if os.path.isfile(target):
         findings = scan_file(target, rules, config)
     elif os.path.isdir(target):
-        findings = scan_directory(target, rules, config)
+        findings = scan_directory_threaded(target, rules, config, args.threads)
     else:
         print(f"Error: {target} not found", file=sys.stderr)
         sys.exit(2)

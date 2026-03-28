@@ -13,6 +13,8 @@ from secret_detect import (
     is_allowlisted_path,
     is_false_positive,
     scan_line,
+    scan_directory,
+    scan_directory_threaded,
     load_rules,
     load_config,
 )
@@ -300,3 +302,25 @@ class TestEntropyFiltering:
                 assert "entropy" in rule and rule["entropy"] > 0, (
                     f"Rule '{rule['id']}' should have an entropy threshold (per gitleaks)"
                 )
+
+
+class TestThreadedDirectoryScan:
+    def test_threaded_scan_matches_single_threaded_scan(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "a.txt"), "w") as f:
+                f.write("AWS_ACCESS_KEY_ID=AKIAZ7VRSQWB4XKHT5DO\n")
+            with open(os.path.join(tmpdir, "b.txt"), "w") as f:
+                f.write("GITHUB_TOKEN=ghp_R2D2C3POLukeSkywalkerHanSoloChewworx\n")
+
+            nested = os.path.join(tmpdir, "nested")
+            os.makedirs(nested)
+            with open(os.path.join(nested, "c.txt"), "w") as f:
+                f.write("STRIPE_SECRET=sk_live_AbCdEfGhIjKlMnOpQrStUvWx\n")
+
+            single = scan_directory(tmpdir, RULES, CONFIG)
+            threaded = scan_directory_threaded(tmpdir, RULES, CONFIG, threads=4)
+
+            single_rows = [(f.rule_id, f.file, f.line, f.match, f.entropy) for f in single]
+            threaded_rows = [(f.rule_id, f.file, f.line, f.match, f.entropy) for f in threaded]
+
+            assert threaded_rows == single_rows

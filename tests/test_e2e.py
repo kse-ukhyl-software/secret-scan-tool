@@ -330,3 +330,28 @@ class TestE2ECLIOptions:
         findings = json.loads(stdout)
         assert rc == 0
         assert findings == []
+
+
+class TestE2EThreadedScanning:
+    def test_threads_matches_single_thread_output(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "root.txt"), "w") as f:
+                f.write("KEY=AKIAZ7VRSQWB4XKHT5DO\n")
+
+            deep = os.path.join(tmpdir, "d1", "d2")
+            os.makedirs(deep)
+            with open(os.path.join(deep, "deep.txt"), "w") as f:
+                f.write("TOKEN=ghp_R2D2C3POLukeSkywalkerHanSoloChewworx\n")
+
+            rc_single, stdout_single, _ = run_scan(tmpdir, "--threads", "1", "--json")
+            rc_threaded, stdout_threaded, _ = run_scan(tmpdir, "--threads", "4", "--json")
+
+            assert rc_single == 1
+            assert rc_threaded == 1
+            assert json.loads(stdout_threaded) == json.loads(stdout_single)
+
+    def test_threads_must_be_positive(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rc, _, stderr = run_scan(tmpdir, "--threads", "0")
+            assert rc == 2
+            assert "--threads must be >= 1" in stderr
