@@ -47,3 +47,5 @@
 ![alt text](secret-push-2.png)
 
 # Additional Task + Test Folder fix
+ - https://github.com/kse-ukhyl-software/secret-scan-tool/actions/runs/23687392879/job/69009071965
+ - Test added in `tests/test_unit.py` for comparison between single thread and multi-thread version
