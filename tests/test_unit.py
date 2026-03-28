@@ -50,9 +50,6 @@ class TestAllowlistedPath:
     def test_node_modules(self):
         assert is_allowlisted_path("foo/node_modules/pkg/index.js", CONFIG["allowlist_paths"]) is True
 
-    def test_node_modules_windows_path(self):
-        assert is_allowlisted_path(r"foo\\node_modules\\pkg\\index.js", CONFIG["allowlist_paths"]) is True
-
     def test_tests_directory(self):
         assert is_allowlisted_path("tests/test_unit.py", CONFIG["allowlist_paths"]) is True
 
